@@ -1,0 +1,12 @@
+type FileData = 
+ record {
+   file: blob;
+   metadata: record {
+               uploadDate: text;
+               uploader: principal;
+             };
+ };
+service : {
+  getId: () -> (int);
+  uploadFile: (principal, FileData) -> (text);
+}
