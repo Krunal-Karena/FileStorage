@@ -1,58 +1,63 @@
-// FileUpload.jsx
 import React, { useState } from 'react';
 import { filestorage } from "../../src/declarations/filestorage";
 import { Principal } from '@dfinity/principal';
+import '../assets/fileUpload.css';
 
 const FileUpload = (props) => {
+  const [Loading, setLoading] = useState(false);
   const [fileData, setFileData] = useState({
-    file: File,
+    file: null,
     metadata: {
-      name: String,
-      size: Number,
-      fileType: String,
-      uploader: Principal, // Replace with actual user information
-      uploadDate: String,
+      name: "",
+      size: 0,
+      fileType: "",
+      uploader: Principal,
+      uploadDate: "",
     },
   });
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
-    // Create a FileReader to read the file
-    const reader = new FileReader();
+    handleFile(file);
+  };
 
-    // Define a callback for when the reading is complete
-    reader.onloadend = () => {
-      // Convert the array buffer to Uint8Array
-      const arrayBuffer = reader.result;
-      const uint8Array = new Uint8Array(arrayBuffer);
+  const handleFile = (file) => {
+    if (file) {
+      // Check if file size is within the limit (2 MB)
+      const maxSizeInBytes = 2 * 1024 * 1024; // 2 MB
+      if (file.size > maxSizeInBytes) {
+        alert('File size exceeds the limit of 2 MB.');
+        return;
+      }
+      // convert file into vec nat8 format 
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const arrayBuffer = reader.result;
+        const uint8Array = new Uint8Array(arrayBuffer);
+        const vecNat8 = Array.from(uint8Array);
 
-      // Convert Uint8Array to vec nat8
-      const vecNat8 = Array.from(uint8Array);
-
-      // Update fileData with file information
-      setFileData(() => ({
-        file: vecNat8,
-        metadata: {
-          name: file.name,
-          size: file.size,
-          fileType: file.type,
-          uploader: Principal.fromText(props.user),
-          uploadDate: new Date().toISOString(),
-        },
-      }));
-    };
-  
-    // Read the file as an array buffer
-    reader.readAsArrayBuffer(file);
+        setFileData({
+          file: vecNat8,
+          metadata: {
+            name: file.name,
+            size: file.size,
+            fileType: file.type,
+            uploader: Principal.fromText(props.user),
+            uploadDate: new Date().toISOString(),
+          },
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    }
   };
 
   const handleUpload = async () => {
-    // console.log(fileData);
     if (fileData.file) {
       try {
-        // Pass the entire fileData object to the onFileUpload function
+        setLoading(true);
         let result = await filestorage.uploadFile(Principal.fromText(props.user), fileData);
         alert(result);
+        setLoading(false);
         window.location.reload();
       } catch (error) {
         console.error('Error uploading file:', error);
@@ -61,9 +66,29 @@ const FileUpload = (props) => {
   };
 
   return (
-    <div>
-      <input type="file" onChange={handleFileChange} />
-      <button onClick={handleUpload}>Upload</button>
+    <div className="file-upload-container">
+      <input
+        type="file"
+        onChange={handleFileChange}
+        className="file-input"
+      />
+      <button
+        onClick={() => document.querySelector('.file-input').click()}
+        className="choose-file-btn"
+      >
+        Choose File
+      </button>
+      <p className="selected-file-info">
+        {fileData.metadata.name && `Selected File: ${fileData.metadata.name}`}
+      </p>
+      <button
+        onClick={handleUpload}
+        className="upload-btn"
+      >
+        {
+          Loading ? "Loading..." : "Upload"
+        }
+      </button>
     </div>
   );
 };

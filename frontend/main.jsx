@@ -4,7 +4,6 @@ import { AuthClient } from "@dfinity/auth-client";
 import App from "./App";
 import "./assets/index.css"
 
-
 function Main() {
   const [authenticated, setAuthenticated] = useState(false);
   const [principal, setPrincipal] = useState(null);
@@ -43,12 +42,12 @@ function Main() {
       setAuthenticated(false);
     }
   }, []);
-  
+
   return (
     <div>
       {!authenticated ? (
         <div className="authentication-container">
-          <p>Not authenticated. Please Log in/Sign Up.</p>
+          <h1>Not authenticated. Please Log in/Sign Up.</h1>
           <button className="auth-button" onClick={handleAuthentication}>
             Continue with Internet identity
           </button>

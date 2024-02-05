@@ -1,13 +1,15 @@
 import React from "react";
+import '../assets/profile.css';
 
 const Profile = ({ principal }) => {
   return (
-    <div>
+    <div className="profile-container">
       <h2>User Profile</h2>
       {principal && (
         <div>
-          <p>Principal : {principal.toString()}</p>
-          {/* Display additional identity information if needed */}
+          <p>
+            <strong>Principal Id :</strong> {principal.toString()}
+          </p>
         </div>
       )}
     </div>
