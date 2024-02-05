@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { AuthClient } from "@dfinity/auth-client";
 import Profile from "./components/Profile"; // Import the UserProfile component
 import FileUpload from "./components/FileUpload";
+import FileList from "./components/FileList";
 
 const App = ({ authenticated, principal }) => {
 
@@ -17,6 +18,7 @@ const App = ({ authenticated, principal }) => {
     <div>
       <Profile principal={principal} />
       <FileUpload user={principal}></FileUpload>
+      <FileList user={principal}></FileList>
       <br />
       <br />
       <br />
