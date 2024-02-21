@@ -12,7 +12,7 @@ actor FileStorage {
    
    public func init() {
       // This will be executed once when the canister is deployed
-      ignore StableMemory.grow(10);
+      ignore StableMemory.grow(100);
    };
 
    private stable var fileOffset : Nat64 = 0;
@@ -30,7 +30,7 @@ actor FileStorage {
 
          //Check if stable memory has enough space and if not then grow
          if(fileOffset + Nat64.fromNat(size + 100) >= (StableMemory.size()*64*1024)) {
-            ignore StableMemory.grow(1);
+            ignore StableMemory.grow(35);
          };
 
          //Store in stable memory
