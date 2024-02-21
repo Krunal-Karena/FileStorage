@@ -3,120 +3,135 @@ import Blob "mo:base/Blob";
 import HashMap "mo:base/HashMap";
 import Principal "mo:base/Principal";
 import Text "mo:base/Text";
-import Int "mo:base/Int";
 import Debug "mo:base/Debug";
+import StableMemory "mo:base/ExperimentalStableMemory";
+import Nat64 "mo:base/Nat64";
+import Iter "mo:base/Iter";
 
 actor FileStorage {
+   
+   public func init() {
+      // This will be executed once when the canister is deployed
+      ignore StableMemory.grow(10);
+   };
 
-  type FileData = {
-    file : Blob;
-    metadata : {
-      name : Text;
-      size : Int;
-      fileType : Text;
-      uploader : Principal;
-      uploadDate : Text
-    }
-  };
+   private stable var fileOffset : Nat64 = 0;
 
-  stable var fileId : Int = 0;
-  // file id map to filedata
-  var filesMap = HashMap.HashMap<Int, FileData>(10, Int.equal, Int.hash);
-  // user map to file ids
-  var usersFile = HashMap.HashMap<Principal, [Int]>(10, Principal.equal, Principal.hash);
+   // user mappping to (file start offset,file size,file's metaDataSize) in stable memory
+   private var usersFile = HashMap.HashMap<Principal, [(Nat64, Nat, Nat)]>(10, Principal.equal, Principal.hash);
 
-  public func getId() : async Int {
-    fileId := fileId +1;
-    return fileId
-  };
+   // stale structure which is used for pre & post upgrade to store Hashap
+   private stable var usersFileStable : [(Principal, [(Nat64, Nat, Nat)])] = [];
 
-  public func uploadFile(user : Principal, filedata : FileData) : async Text {
-    try {
-      var currFileId : Int = await getId();
-      filesMap.put(currFileId, filedata);
+   public shared (msg) func uploadFile(fileObject : Blob, metaDataSize : Nat) : async Text {
+      try {
+         let user = msg.caller;
+         let size = fileObject.size();
 
-      var userArray : [Int] = switch (usersFile.get(user)) {
-        case (?value) { value };
-        case (null) { [] }
+         //Check if stable memory has enough space and if not then grow
+         if(fileOffset + Nat64.fromNat(size + 100) >= (StableMemory.size()*64*1024)) {
+            ignore StableMemory.grow(1);
+         };
+
+         //Store in stable memory
+         StableMemory.storeBlob(fileOffset, fileObject);
+
+         var userArray : [(Nat64, Nat, Nat)] = switch (usersFile.get(user)) {
+            case (?value) { value };
+            case (null) { [] }
+         };
+
+         //Update user Array
+         let updatedArray = Array.append<(Nat64, Nat, Nat)>(userArray, [(fileOffset, size, metaDataSize)]);
+         usersFile.put(user, updatedArray);
+
+         //update fileOffset
+         fileOffset := fileOffset + Nat64.fromNat(size + 100);
+
+         return "Successfully Uploaded"
+      } catch (err) {
+
+         return "Error Uploading File"
       };
 
-      let updatedArray = Array.append<Int>(userArray, [currFileId]);
-      usersFile.put(user, updatedArray);
+   };
 
-      return "Successfully Uploaded"
-    } catch (err) {
-      return "Error Uploading File"
-    };
-
-  };
-
-  // get file ids corresponding to user
-  public query func getUserFiles(user : Principal) : async [Int] {
-    switch (usersFile.get(user)) {
-      case (?fileIds) { return fileIds };
-      case (null) { return [] }
-    }
-  };
-
-  //get file data from file id
-  public query func getFileData(fileId : Nat) : async FileData {
-    switch (filesMap.get(fileId)) {
-      case (?fileData) { return fileData };
-      case (null) {
-        return {
-          file = Blob.fromArray([]);
-          metadata = {
-            name = "";
-            size = 0;
-            fileType = "";
-            uploader = Principal.fromText("");
-            uploadDate = ""
-          }
-        }
+   // get file ids corresponding to user
+   public shared query (msg) func getUserFiles() : async [(Nat64, Nat, Nat)] {
+      switch (usersFile.get(msg.caller)) {
+         case (?fileIds) { return fileIds };
+         case (null) { return [] }
       }
-    }
-  };
+   };
 
-  public func deleteFile(fileId : Int) : async Text {
-    try {
+   // get file data from file id
+   public query func getFileData(fileId : (Nat64, Nat, Nat)) : async Blob {
+      let (fileOffset, size, metaDataSize) = fileId;
 
-      let fileData = switch (filesMap.get(fileId)) {
-        case (?data) { data };
-        case (null) { return "File not found" }
-      };
+      try {
+         // Load data from stable memory
+         var loadedBlob = StableMemory.loadBlob(fileOffset, size);
+         return loadedBlob
+      } catch (err) {
+         return Blob.fromArray([])
+      }
+   };
 
-      // Remove file ID from user's file list
-      let user = fileData.metadata.uploader;
-      let userArray : [Int] = switch (usersFile.get(user)) {
-        case (?value) { value };
-        case (null) { return "User not found" }
-      };
-      let updatedArray = Array.filter<Int>(userArray, func(id : Int) = id != fileId);
-      usersFile.put(user, updatedArray);
+   public shared (msg) func deleteFile(fileId : (Nat64, Nat, Nat)) : async Text {
+      try {
+         let user = msg.caller;
 
-      // Remove file data from filesMap
-      filesMap.delete(fileId);
+         // get user file list
+         let userArray : [(Nat64, Nat, Nat)] = switch (usersFile.get(user)) {
+            case (?value) { value };
+            case (null) { return "User not found" }
+         };
 
-      return "Successfully Deleted"
-    } catch (err) {
-      return "Error Deleting File"
-    }
-  };
+         //Update user list
+         let updatedArray = Array.filter<(Nat64, Nat, Nat)>(userArray, func(id) { id != fileId });
+         usersFile.put(user, updatedArray);
 
-  public func shareFile(fileId : Int, recipientId : Principal) : async Text {
-    try {
-      // Update the usersFile map for the recipient
-      let recipientArray : [Int] = switch (usersFile.get(recipientId)) {
-        case (?value) { value };
-        case (null) { [] }
-      };
+         return "Successfully Deleted"
+      } catch (err) {
+         return "Error Deleting File"
+      }
+   };
 
-      let updatedRecipientArray = Array.append<Int>(recipientArray, [fileId]);
-      usersFile.put(recipientId, updatedRecipientArray);
+   public func shareFile(fileId : (Nat64, Nat, Nat), recipientId : Principal) : async Text {
+      try {
+         // get recipient's file list
+         let recipientArray : [(Nat64, Nat, Nat)] = switch (usersFile.get(recipientId)) {
+            case (?value) { value };
+            case (null) { [] }
+         };
 
-      return "File shared successfully"
-    } catch (err) {
-      return "Error sharing file"
-    }
-  }
+         //Check if file already exist or not
+         if (Array.find<(Nat64, Nat, Nat)>(recipientArray, func(id) { id == fileId }) != null) {
+            return "File already shared"
+         };
+
+         //update recipient Array
+         let updatedRecipientArray = Array.append<(Nat64, Nat, Nat)>(recipientArray, [fileId]);
+         usersFile.put(recipientId, updatedRecipientArray);
+
+         return "File shared successfully"
+      } catch (err) {
+         return "Error sharing file"
+      }
+   };
+
+   system func preupgrade() {
+      // Convert HashMap to an array of tuples
+      usersFileStable := Iter.toArray(usersFile.entries())
+   };
+
+   system func postupgrade() {
+      // Reconstruct the HashMap from the serialized entries
+      usersFile := HashMap.fromIter<Principal, [(Nat64, Nat, Nat)]>(
+         usersFileStable.vals(),
+         usersFileStable.size(),
+         Principal.equal,
+         Principal.hash,
+      )
+   }
 }

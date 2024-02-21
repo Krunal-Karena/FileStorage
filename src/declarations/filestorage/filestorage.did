@@ -1,20 +1,24 @@
-type FileData = 
- record {
-   file: blob;
-   metadata:
-    record {
-      fileType: text;
-      name: text;
-      size: int;
-      uploadDate: text;
-      uploader: principal;
-    };
- };
 service : {
-  deleteFile: (int) -> (text);
-  getFileData: (nat) -> (FileData) query;
-  getId: () -> (int);
-  getUserFiles: (principal) -> (vec int) query;
-  shareFile: (int, principal) -> (text);
-  uploadFile: (principal, FileData) -> (text);
+  deleteFile: (record {
+                 nat64;
+                 nat;
+                 nat;
+               }) -> (text);
+  getFileData: (record {
+                  nat64;
+                  nat;
+                  nat;
+                }) -> (blob) query;
+  getUserFiles: () -> (vec record {
+                             nat64;
+                             nat;
+                             nat;
+                           }) query;
+  init: () -> () oneway;
+  shareFile: (record {
+                nat64;
+                nat;
+                nat;
+              }, principal) -> (text);
+  uploadFile: (blob, nat) -> (text);
 }
